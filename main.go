@@ -61,5 +61,11 @@ func main() {
 
 	disgo.AddEventListeners(&events.ListenerAdapter{
 		OnDMMessageCreate: dmMessageCreateListener(dmThreadBot),
+		OnDMMessageUpdate: dmMessageUpdateListener(dmThreadBot),
+		OnDMMessageDelete: dmMessageDeleteListener(dmThreadBot),
+
+		OnGuildMessageCreate: guildMessageCreateListener(dmThreadBot),
+		OnGuildMessageUpdate: guildMessageUpdateListener(dmThreadBot),
+		OnGuildMessageDelete: guildMessageDeleteListener(dmThreadBot),
 	})
 }
