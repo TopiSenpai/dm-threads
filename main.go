@@ -18,7 +18,9 @@ var (
 	dmWebhookID    = discord.Snowflake(os.Getenv("DM_WEBHOOK_ID"))
 	dmWebhookToken = os.Getenv("DM_WEBHOOK_TOKEN")
 
-	botToken = os.Getenv("BOT_TOKEN")
+	botToken     = os.Getenv("BOT_TOKEN")
+	botGuildID   = discord.Snowflake(os.Getenv("BOT_GUILD_ID"))
+	botChannelID = discord.Snowflake(os.Getenv("BOT_CHANNEL_ID"))
 )
 
 type Bot struct {
@@ -58,6 +60,6 @@ func main() {
 	}
 
 	disgo.AddEventListeners(&events.ListenerAdapter{
-		OnDMMessageCreate: dmListener(dmThreadBot),
+		OnDMMessageCreate: dmMessageCreateListener(dmThreadBot),
 	})
 }
