@@ -2,6 +2,10 @@ module dm-threads
 
 go 1.17
 
+replace (
+	github.com/DisgoOrg/disgo => ../disgo
+)
+
 require github.com/DisgoOrg/disgo v0.6.8-0.20211208131805-0a2e90249781
 
 require (

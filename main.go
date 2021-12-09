@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"github.com/DisgoOrg/disgo/core"
 	"github.com/DisgoOrg/disgo/core/bot"
 	"github.com/DisgoOrg/disgo/core/events"
@@ -8,9 +9,11 @@ import (
 	"github.com/DisgoOrg/disgo/gateway"
 	"github.com/DisgoOrg/disgo/rest"
 	"github.com/DisgoOrg/disgo/webhook"
-	"log"
+	"github.com/DisgoOrg/log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 )
 
@@ -18,8 +21,8 @@ var (
 	dmWebhookID    = discord.Snowflake(os.Getenv("DM_WEBHOOK_ID"))
 	dmWebhookToken = os.Getenv("DM_WEBHOOK_TOKEN")
 
-	botToken     = os.Getenv("BOT_TOKEN")
-	botGuildID   = discord.Snowflake(os.Getenv("BOT_GUILD_ID"))
+	botToken = os.Getenv("BOT_TOKEN")
+	//botGuildID   = discord.Snowflake(os.Getenv("BOT_GUILD_ID"))
 	botChannelID = discord.Snowflake(os.Getenv("BOT_CHANNEL_ID"))
 )
 
@@ -28,12 +31,20 @@ type Bot struct {
 	dmWebhookClient *webhook.Client
 
 	// DMChannelID -> ThreadID
-	userThreads map[discord.Snowflake]discord.Snowflake
+	dmThreads map[discord.Snowflake]discord.Snowflake
+	// ThreadID -> DMChannelID
+	threadDMs map[discord.Snowflake]discord.Snowflake
+
 	// DMMessageID -> ThreadMessageID
-	userMessageIDs map[discord.Snowflake]discord.Snowflake
+	dmMessageIDs map[discord.Snowflake]discord.Snowflake
+	// ThreadMessageID -> DMMessageID
+	threadMessageIDs map[discord.Snowflake]discord.Snowflake
 }
 
 func main() {
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	log.SetLevel(log.LevelDebug)
+
 	httpClient := &http.Client{Timeout: 10 * time.Second}
 	disgo, err := bot.New(botToken,
 		bot.WithRestClientOpts(
@@ -54,18 +65,33 @@ func main() {
 	)
 
 	dmThreadBot := &Bot{
-		bot:             disgo,
-		dmWebhookClient: webhookClient,
-		userThreads:     make(map[discord.Snowflake]discord.Snowflake),
+		bot:              disgo,
+		dmWebhookClient:  webhookClient,
+		dmThreads:        make(map[discord.Snowflake]discord.Snowflake),
+		threadDMs:        make(map[discord.Snowflake]discord.Snowflake),
+		dmMessageIDs:     make(map[discord.Snowflake]discord.Snowflake),
+		threadMessageIDs: make(map[discord.Snowflake]discord.Snowflake),
 	}
 
 	disgo.AddEventListeners(&events.ListenerAdapter{
-		OnDMMessageCreate: dmMessageCreateListener(dmThreadBot),
-		OnDMMessageUpdate: dmMessageUpdateListener(dmThreadBot),
-		OnDMMessageDelete: dmMessageDeleteListener(dmThreadBot),
+		OnDMMessageCreate:   dmMessageCreateListener(dmThreadBot),
+		OnDMMessageUpdate:   dmMessageUpdateListener(dmThreadBot),
+		OnDMMessageDelete:   dmMessageDeleteListener(dmThreadBot),
+		OnDMUserTypingStart: dmUserTypingStartListener(dmThreadBot),
 
-		OnGuildMessageCreate: guildMessageCreateListener(dmThreadBot),
-		OnGuildMessageUpdate: guildMessageUpdateListener(dmThreadBot),
-		OnGuildMessageDelete: guildMessageDeleteListener(dmThreadBot),
+		OnGuildMessageCreate:     guildMessageCreateListener(dmThreadBot),
+		OnGuildMessageUpdate:     guildMessageUpdateListener(dmThreadBot),
+		OnGuildMessageDelete:     guildMessageDeleteListener(dmThreadBot),
+		OnGuildMemberTypingStart: guildMemberTypingStartListener(dmThreadBot),
 	})
+
+	if err = disgo.ConnectGateway(context.Background()); err != nil {
+		log.Fatal("Error connecting to gateway: ", err)
+	}
+
+	defer disgo.Close(context.Background())
+
+	s := make(chan os.Signal, 1)
+	signal.Notify(s, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
+	<-s
 }
